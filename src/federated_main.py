@@ -68,8 +68,11 @@ if __name__ == '__main__':
     print_every = 2
     val_loss_pre, counter = 0, 0
 
+
+    # training / inference 구할 때 따로 따로 나눠서 하나 돌려놓고 하나 돌리는
     for epoch in tqdm(range(args.epochs)):
         server_weights, client_weights, client_h_weights, local_losses = [], [], [], []
+
         print(f'\n | Global Training Round : {epoch+1} |\n')
 
         client_model.train()
@@ -79,10 +82,22 @@ if __name__ == '__main__':
         for idx in range(args.num_users):
             local_model = LocalUpdate(args=args, dataset=train_dataset,
                                       idxs=user_groups[idx], logger=logger)
-            s_p,c_p,c_h, loss = local_model.update_weights(
-                Client_model=copy.deepcopy(client_model),Server_model=copy.deepcopy(server_model),
-                client_h=client_h, global_round=epoch
+
+            if epoch != 0:
+                #각 client에 global round 끝났을 때 update
+                update_client_m = copy.deepcopy(client_model).load_state_dict(client_weight)
+                update_client_h = copy.deepcopy(client_h).load_state_dict(h_weight)
+
+            else :  #제일 첫 global round
+                update_client_m = copy.deepcopy(client_model)
+                update_client_h = copy.deepcopy(client_h)
+
+            s_p, c_p, c_h, loss = local_model.update_weights(
+                Client_model=update_client_m,Server_model=copy.deepcopy(server_model),
+                client_h=update_client_h, global_round=epoch
             )
+
+            # 각 client 에서 학습 시킨 파라미터 저장
             server_weights.append(copy.deepcopy(s_p))
             client_weights.append(copy.deepcopy(c_p))
             client_h_weights.append(copy.deepcopy(c_h))
@@ -92,10 +107,9 @@ if __name__ == '__main__':
         server_weight = average_weights(server_weights)
         server_model.load_state_dict(server_weight)
 
-        for idx in range(args.num_users):
-            # update client weights
-            client_weight = c_aggregation(client_weights,idx)
-            h_weight = h_aggregation(client_h_weights,idx)
+        # update client weights
+        client_weight = c_aggregation(client_weights)
+        h_weight = h_aggregation(client_h_weights)
 
 
         loss_avg = sum(local_losses) / len(local_losses)

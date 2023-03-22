@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
+import numpy as np
 
 class DatasetSplit(Dataset):
     def __init__(self, dataset, idxs):
@@ -113,6 +114,12 @@ class LocalUpdate(object):
         accuracy = correct / total
         return accuracy, loss
 
+def softmax(z):
+    array_z= z - np.max(z)
+    exp_x = np.array(array_z)
+    result = exp_x/np.sum(exp_x)
+    return result
+
 def test_inference(args, model, test_dataset):
     model.eval()
     loss, total, correct = 0.0,0.0,0.0
@@ -124,12 +131,12 @@ def test_inference(args, model, test_dataset):
     for batch_idx, (images, labels) in enumerate(testloader):
         images, labels = images.to(device), labels.to(device)
 
-        #inference
+        # inference
         output = model(images)
         batch_loss = criterion(output, labels)
         loss += batch_loss.item()
 
-        #prediction
+        # prediction
         _, pred_labels = torch.max(output,1)
         pred_labels = pred_labels.view(-1)
         correct += torch.sum(torch.eq(pred_labels, labels)).item()

@@ -59,6 +59,7 @@ def args_parser():
     #Split GP
     parser.add_argument('--lamda', type=float, default=0.3, help='lamda for model aggregation')
     parser.add_argument('--gamma', type=float, default=0.5, help='gamma for multi-exit loss function')
+    parser.add_argument('--entropy', type=float, default=0.4, help='entropy threshold for inference')
 
     args = parser.parse_args()
     return args

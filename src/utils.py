@@ -1,6 +1,7 @@
 import copy
 import torch
 from torchvision import datasets, transforms
+from options import *
 from sampling import mnist_iid, mnist_noniid , mnist_noniid_unequal
 
 def get_dataset(args):
@@ -41,18 +42,36 @@ def average_weights(w):
     w_avg = copy.deepcopy(w[0]) #w[0] 깊은 복사
     for key in w_avg.keys():
         for i in range(1,len(w)):
-            w_avg[key]+=w[i][key]
+            w_avg[key] += w[i][key]
         w_avg[key] = torch.div(w_avg[key], len(w)) # 전체 개수로 나눠서 평균 취하기
     return w_avg
 
-def c_aggregation(w,idx):
+def c_aggregation(w,args):
     w_agg = copy.deepcopy(w[0])
+    w_idx = copy.deepcopy(w[0])
+    # (1-lamda) 에 곱하는 weight 총합
+    for key in w_agg.keys():
+        for i in range(1,len(w)):
+            w_agg[key]+=w[i][key]
+        w_agg[key] = torch.div(w_agg[key], len(w))
 
+    for key in w_agg.keys():
+        for i in range(1,len(w)):
+            w_idx[i][key] = args.lamda * w_idx[i][key] + (1.-args.lamda) * w_agg[key]
     return w_agg
 
-def h_aggregation(w,idx):
+def h_aggregation(w,args):
     w_agg = copy.deepcopy(w[0])
+    w_idx = copy.deepcopy(w[0])
+    # (1-lamda) 에 곱하는 weight 총합
+    for key in w_agg.keys():
+        for i in range(1, len(w)):
+            w_agg[key] += w[i][key]
+        w_agg[key] = torch.div(w_agg[key], len(w))
 
+    for key in w_agg.keys():
+        for i in range(1, len(w)):
+            w_idx[i][key] = args.lamda * w_idx[i][key] + (1. - args.lamda) * w_agg[key]
     return w_agg
 
 def exp_details(args):
