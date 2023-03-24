@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 import numpy as np
+import math
 
 class DatasetSplit(Dataset):
     def __init__(self, dataset, idxs):
@@ -85,30 +86,70 @@ class LocalUpdate(object):
                 batch_loss.append(loss.item())
             epoch_loss.append(sum(batch_loss)/len(batch_loss))
 
-        return Client_model.state_dict(),Server_model.state_dict(),client_h.state_dict(), sum(epoch_loss) / len(epoch_loss)
+        return Server_model.state_dict(),Client_model.state_dict(),client_h.state_dict(), sum(epoch_loss) / len(epoch_loss)
 
-    def inference(self, model):
+
+    def inference(self, model_c, model_h, model_s):
         """
 
         :param model:
         :return: inference accuracy and loss
         """
 
-        model.eval()
+        model_c.eval()
+        model_s.eval()
+        model_h.eval()
+
         loss, total, correct = 0.0,0.0,0.0
 
         for batch_idx, (images, labels) in enumerate(self.testloader):
             images, labels = images.to(self.device), labels.to(self.device)
 
-            # Inference
-            outputs = model(images)
-            batch_loss = self.criterion(outputs, labels)
-            loss += batch_loss.item()
+            client_output = model_c(images)
+            h_output = model_h(client_output)
+
+            #entropy 계산
+            outputs_ = []
+            for num in range(images.shape[0]):
+                entropy = 0
+                for label_p in range(10):
+                    output_numpy = h_output[num].detach().numpy()
+                    entropy += - (output_numpy[label_p])*(np.log2(np.abs(output_numpy[label_p])))
+
+                # 기준 엔트로피보다 작다면 client-side model
+                if entropy < self.args.entropy:
+                    outputs = h_output[num]
+                    batch_loss = self.criterion(outputs, labels[num])
+                    loss += batch_loss.item()
+
+                    outputs = torch.unsqueeze(outputs, 0)
+                    _, pred_labels = torch.max(outputs,1)
+                    pred_labels = pred_labels.view(-1)
+                    correct += torch.sum(torch.eq(pred_labels, labels[num])).item()
+
+                    # outputs_list = outputs.detach().numpy()
+                    # outputs_.append(outputs_list)
+
+
+                # 기준 엔트로피보다 크다면 server-side model
+                else :
+                    outputs = model_s(torch.unsqueeze(client_output[num],0))
+                    batch_loss = self.criterion(outputs[0], labels[num])
+                    loss += batch_loss.item()
+
+                    outputs = torch.unsqueeze(outputs, 0)
+                    _, pred_labels = torch.max(outputs, 1)
+                    pred_labels = pred_labels.view(-1)
+                    correct += torch.sum(torch.eq(pred_labels, labels[num])).item()
+
+                    # outputs_list = outputs.detach().numpy()
+                    # outputs_.append(outputs_list)
+
 
             # Prediction
-            _, pred_labels = torch.max(outputs, 1)
-            pred_labels = pred_labels.view(-1)
-            correct += torch.sum(torch.eq(pred_labels, labels)).item()
+            # outputs_ = torch.from_numpy(np.array(outputs_))
+            # outputs_ = torch.Tensor(outputs_)
+
             total += len(labels)
 
         accuracy = correct / total
@@ -120,8 +161,11 @@ def softmax(z):
     result = exp_x/np.sum(exp_x)
     return result
 
-def test_inference(args, model, test_dataset):
-    model.eval()
+def test_inference(args, model_c, model_h,model_s, test_dataset):
+    model_c.eval()
+    model_s.eval()
+    model_h.eval()
+
     loss, total, correct = 0.0,0.0,0.0
 
     device = 'cuda' if args.gpu else 'cpu'
@@ -131,13 +175,42 @@ def test_inference(args, model, test_dataset):
     for batch_idx, (images, labels) in enumerate(testloader):
         images, labels = images.to(device), labels.to(device)
 
-        # inference
-        output = model(images)
-        batch_loss = criterion(output, labels)
-        loss += batch_loss.item()
+        client_output = model_c(images)
+        h_output = model_h(client_output)
 
-        # prediction
-        _, pred_labels = torch.max(output,1)
+        # entropy 계산
+        outputs_ = []
+        for num in range(images.shape[0]):
+            entropy = 0
+            for label_p in range(10):
+                output_numpy = h_output[num].detach().numpy()
+                entropy += - (output_numpy[label_p]) * (np.log2(np.abs(output_numpy[label_p])))
+
+            # 기준 엔트로피보다 작다면 client-side model
+            if entropy < args.entropy:
+                outputs = h_output[num]
+                batch_loss = criterion(outputs, labels[num])
+                loss += batch_loss.item()
+
+                outputs_list = outputs.detach().numpy()
+                outputs_.append(outputs_list)
+
+
+
+            # 기준 엔트로피보다 크다면 server-side model
+            else:
+                outputs = model_s(torch.unsqueeze(client_output[num], 0))
+                batch_loss = criterion(outputs[0], labels[num])
+                loss += batch_loss.item()
+
+                outputs_list = outputs.detach().numpy()
+                outputs_.append(outputs_list)
+
+        # Prediction
+        outputs_ = torch.from_numpy(np.array(outputs_))
+        outputs_ = torch.Tensor(outputs_)
+
+        _, pred_labels = torch.max(outputs_, 1)
         pred_labels = pred_labels.view(-1)
         correct += torch.sum(torch.eq(pred_labels, labels)).item()
         total += len(labels)

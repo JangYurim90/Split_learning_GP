@@ -48,7 +48,7 @@ def average_weights(w):
 
 def c_aggregation(w,args):
     w_agg = copy.deepcopy(w[0])
-    w_idx = copy.deepcopy(w[0])
+    w_idx = copy.deepcopy(w)
     # (1-lamda) 에 곱하는 weight 총합
     for key in w_agg.keys():
         for i in range(1,len(w)):
@@ -62,7 +62,7 @@ def c_aggregation(w,args):
 
 def h_aggregation(w,args):
     w_agg = copy.deepcopy(w[0])
-    w_idx = copy.deepcopy(w[0])
+    w_idx = copy.deepcopy(w)
     # (1-lamda) 에 곱하는 weight 총합
     for key in w_agg.keys():
         for i in range(1, len(w)):

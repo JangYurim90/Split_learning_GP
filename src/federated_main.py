@@ -75,20 +75,22 @@ if __name__ == '__main__':
 
         print(f'\n | Global Training Round : {epoch+1} |\n')
 
-        client_model.train()
-        client_h.train()
-        server_model.train()
+        # client_model.train()
+        # client_h.train()
+        # server_model.train()
 
         for idx in range(args.num_users):
             local_model = LocalUpdate(args=args, dataset=train_dataset,
                                       idxs=user_groups[idx], logger=logger)
 
             if epoch != 0:
-                #각 client에 global round 끝났을 때 update
-                update_client_m = copy.deepcopy(client_model).load_state_dict(client_weight)
-                update_client_h = copy.deepcopy(client_h).load_state_dict(h_weight)
+                # 각 client에 global round 끝났을 때 update
+                client_model.load_state_dict(client_weight)
+                client_h.load_state_dict(h_weight)
+                update_client_m = copy.deepcopy(client_model)
+                update_client_h = copy.deepcopy(client_h)
 
-            else :  #제일 첫 global round
+            else :  # 제일 첫 global round
                 update_client_m = copy.deepcopy(client_model)
                 update_client_h = copy.deepcopy(client_h)
 
@@ -108,8 +110,8 @@ if __name__ == '__main__':
         server_model.load_state_dict(server_weight)
 
         # update client weights
-        client_weight = c_aggregation(client_weights)
-        h_weight = h_aggregation(client_h_weights)
+        client_weight = c_aggregation(client_weights,args=args)
+        h_weight = h_aggregation(client_h_weights,args=args)
 
 
         loss_avg = sum(local_losses) / len(local_losses)
@@ -117,11 +119,15 @@ if __name__ == '__main__':
 
         # Calculate avg training accuracy over all users at every epoch
         list_acc, list_loss = [], []
-        global_model.eval()
+
+        client_model.eval()
+        client_h.eval()
+        server_model.eval()
+
         for c in range(args.num_users):
             local_model = LocalUpdate(args=args, dataset=train_dataset,
-                                      idxs=user_groups[idx], logger=logger)
-            acc, loss = local_model.inference(model=global_model)
+                                      idxs=user_groups[c], logger=logger)
+            acc, loss = local_model.inference(model_c = client_model, model_h = client_h, model_s = server_model)
             list_acc.append(acc)
             list_loss.append(loss)
         train_accuracy.append(sum(list_acc)/len(list_acc))
@@ -133,7 +139,7 @@ if __name__ == '__main__':
             print('Train Accuracy: {:.2f}% \n'.format(100 * train_accuracy[-1]))
 
     # Test inference after completion of training
-    test_acc, test_loss = test_inference(args, global_model, test_dataset)
+    test_acc, test_loss = test_inference(args, client_model,client_h,server_model, test_dataset)
 
     print(f' \n Results after {args.epochs} global rounds of training:')
     print("|---- Avg Train Accuracy: {:.2f}%".format(100 * train_accuracy[-1]))

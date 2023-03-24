@@ -26,25 +26,25 @@ class CNNFMnist_client(nn.Module):
     def __init__(self, args):
         super(CNNFMnist_client, self).__init__()
         self.layer1 = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=5, padding=2),
+            nn.Conv2d(1, 16, kernel_size=3, padding=1),
             nn.BatchNorm2d(16),
             nn.ReLU(),
             nn.MaxPool2d(2))
         self.layer2 = nn.Sequential(
-            nn.Conv2d(16, 32, kernel_size=5, padding=2),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.MaxPool2d(2))
         self.layer3 = nn.Sequential(
-            nn.Conv2d(32, 64, kernel_size=5, padding=2),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(2))
+            nn.ReLU())
+            #nn.MaxPool2d(2))
         self.layer4 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=5, padding=2),
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.MaxPool2d(2))
+            nn.ReLU())
+            #nn.MaxPool2d(2))
 
     def forward(self, x):
         out = self.layer1(x)
@@ -57,11 +57,10 @@ class CNNFMnist_client(nn.Module):
 class h_classifier(nn.Module):
     def __init__(self, args):
         super(h_classifier, self).__init__()
-        self.fc = nn.Linear(428*128, args.num_classes)
+        self.fc = nn.Linear(128 * 7 * 7, args.num_classes)
 
     def forward(self, x):
-        #x = x.view(x.size(0), -1)
-        x = x.view(1, -1)
+        x = x.view(x.size(0), -1)
         out = self.fc(x)
         return out
 
@@ -70,10 +69,10 @@ class CNNFMnist_server(nn.Module):
     def __init__(self, args):
         super(CNNFMnist_server, self).__init__()
         self.layer1 = nn.Sequential(
-            nn.Conv2d(128, 128, kernel_size=5, padding=2),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
             nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.MaxPool2d(2))
+            nn.ReLU())
+            #nn.MaxPool2d(2))
         self.fc1 = nn.Linear(7 * 7 * 128, 7 * 7 * 64)
         self.fc2 = nn.Linear(7 * 7 * 64, 7 * 7 * 32)
         self.fc3 = nn.Linear(7 * 7 * 32, 10)
