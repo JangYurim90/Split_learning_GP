@@ -2,7 +2,7 @@ import copy
 import torch
 from torchvision import datasets, transforms
 from options import *
-from sampling import mnist_iid, mnist_noniid , mnist_noniid_unequal
+from sampling import *
 
 def get_dataset(args):
     """
@@ -34,9 +34,10 @@ def get_dataset(args):
                 user_groups = mnist_noniid_unequal(train_dataset, args.num_users)
             else:
                 # Chose euqal splits for every user
-                user_groups = mnist_noniid(train_dataset, args.num_users)
+                user_groups, class_labels = mnist_noniid(train_dataset, args.num_users)
+                test_user_groups = mnist_test_noniid(test_dataset,args.num_users,class_labels)
 
-        return train_dataset, test_dataset, user_groups
+        return train_dataset, test_dataset, user_groups ,test_user_groups
 
 def average_weights(w):
     w_avg = copy.deepcopy(w[0]) #w[0] 깊은 복사

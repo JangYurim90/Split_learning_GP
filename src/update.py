@@ -161,7 +161,7 @@ def softmax(z):
     result = exp_x/np.sum(exp_x)
     return result
 
-def test_inference(args, model_c, model_h,model_s, test_dataset):
+def test_inference(args, model_c, model_h,model_s, test_dataset, idx):
     model_c.eval()
     model_s.eval()
     model_h.eval()
@@ -170,7 +170,8 @@ def test_inference(args, model_c, model_h,model_s, test_dataset):
 
     device = 'cuda' if args.gpu else 'cpu'
     criterion = nn.NLLLoss().to(device)
-    testloader = DataLoader(test_dataset, batch_size=128, shuffle=False)
+    testloader = DataLoader(DatasetSplit(test_dataset, idx),
+                            batch_size=int(len(idx) / 10), shuffle=False)
 
     for batch_idx, (images, labels) in enumerate(testloader):
         images, labels = images.to(device), labels.to(device)
@@ -192,9 +193,13 @@ def test_inference(args, model_c, model_h,model_s, test_dataset):
                 batch_loss = criterion(outputs, labels[num])
                 loss += batch_loss.item()
 
-                outputs_list = outputs.detach().numpy()
-                outputs_.append(outputs_list)
+                outputs = torch.unsqueeze(outputs, 0)
+                _, pred_labels = torch.max(outputs, 1)
+                pred_labels = pred_labels.view(-1)
+                correct += torch.sum(torch.eq(pred_labels, labels[num])).item()
 
+                # outputs_list = outputs.detach().numpy()
+                # outputs_.append(outputs_list)
 
 
             # 기준 엔트로피보다 크다면 server-side model
@@ -203,18 +208,22 @@ def test_inference(args, model_c, model_h,model_s, test_dataset):
                 batch_loss = criterion(outputs[0], labels[num])
                 loss += batch_loss.item()
 
-                outputs_list = outputs.detach().numpy()
-                outputs_.append(outputs_list)
+                outputs = torch.unsqueeze(outputs, 0)
+                _, pred_labels = torch.max(outputs, 1)
+                pred_labels = pred_labels.view(-1)
+                correct += torch.sum(torch.eq(pred_labels, labels[num])).item()
+
+                # outputs_list = outputs.detach().numpy()
+                # outputs_.append(outputs_list)
 
         # Prediction
-        outputs_ = torch.from_numpy(np.array(outputs_))
-        outputs_ = torch.Tensor(outputs_)
+        # outputs_ = torch.from_numpy(np.array(outputs_))
+        # outputs_ = torch.Tensor(outputs_)
 
-        _, pred_labels = torch.max(outputs_, 1)
-        pred_labels = pred_labels.view(-1)
-        correct += torch.sum(torch.eq(pred_labels, labels)).item()
         total += len(labels)
 
     accuracy = correct / total
+
+
     return accuracy, loss
 

@@ -1,5 +1,7 @@
 import numpy as np
 from torchvision import datasets, transforms
+import random
+import tensorflow as tf
 
 def mnist_iid(dataset, num_users):
     """
@@ -16,25 +18,34 @@ def mnist_iid(dataset, num_users):
     return dict_users
 
 def mnist_noniid(dataset, num_users):
-    num_shards, num_imgs = 200,300
-    idx_shard = [i for i in range(num_shards)] # list에 shrads의 개수만큼 index 생성
-    dict_users = {i : np.array([]) for i in range(num_users)} # 유저의 수 만큼 딕셔너리 생성
-    idxs = np.arange(num_shards*num_imgs) # shard이 개수와 이미지의 개수를 곱한 수 만큼의 list 생성 (200*300=> [0,1,,,,,59999]
-    labels = dataset.train_labels.numpy() # dataset.train_labels를 numpy 배열로 반환한다.
+    # set random seed
+    random.seed(1)
+    np.random.seed(1)
+    tf.random.set_seed(1)
 
-    #labels 정렬(sort)
-    idxs_labels = np.vstack((idxs,labels)) #idx와 labels의 결합 ([[idxs],[labels]])
-    idxs_labels = idxs_labels[:, idxs_labels[1, :].argsort()] #idxs_labels에서 index는 그대로 두고 labels만 오름차순으로 정렬
-    idxs = idxs_labels[0, :] #idxs는 따로 정렬된 새로 운 idx로 저장
+    dict_users = {i: np.array([]) for i in range(num_users)}
+    y_train = dataset.train_labels
 
-    #각 client당 2개의 shards로 분배
-    for i in range(num_users):
-        rand_set = set(np.random.choice(idx_shard, 2, replace = False))
-        idx_shard = list(set(idx_shard)-rand_set)
-        for rand in rand_set:
-            dict_users[i] = np.concatenate((dict_users[i],idxs[rand*num_imgs:(rand+1)*num_imgs]),axis = 0)
-            # numpy 합침 // {각 유저 딕셔너리 index i : 뽑아진 각 shard인덱스에 맞게 imgs 개수를 곱해서 해당 index를 함께 저장}
-    return dict_users  # 딕셔너리 유저 반납
+    # 랜덤으로 두 개의 클래스 선택
+    class_labels = np.random.choice(np.unique(dataset.train_labels), size=100, replace=True).reshape(num_users, 2)
+
+    # 각 클래스(또는 레이블)의 개수 세기
+    label_counts = [np.count_nonzero(class_labels == label) for label in range(10)]
+
+    indices_labels = []
+    for label in range(10):
+        indices = np.where(y_train == label)[0]
+        indices_labels.append(indices)
+
+    for i, classes in enumerate(class_labels):
+        for label in classes:
+            indices = indices_labels[label]
+            num_images = int(6000 / label_counts[label])
+            indices_ran = np.random.choice(indices, size=num_images, replace=True)
+            indices_labels[label] = np.delete(indices, np.where(np.isin(indices, indices_ran)))
+
+            dict_users[i] = np.concatenate((dict_users[i], indices_ran), axis=0)
+    return dict_users , class_labels  # 딕셔너리 유저 반납
 
 def mnist_noniid_unequal(dataset, num_users):
     """
@@ -124,3 +135,49 @@ def mnist_noniid_unequal(dataset, num_users):
                     axis=0)
 
     return dict_users
+
+def mnist_test_noniid(dataset,num_users,class_labels):
+    # 각 클래스(또는 레이블)의 개수 세기
+    label_counts = [np.count_nonzero(class_labels == label) for label in range(10)]
+    test_label = dataset.test_labels
+
+    indices_labels = []
+    rhos = [0, 0.2, 0.4, 0.6, 0.8, 1.0]
+    dict_rhos_groups = {i: np.array([]) for i in rhos}
+
+    for label in range(10):
+        indices = np.where(test_label == label)[0]
+        indices_labels.append(indices)
+
+    for rho in rhos: #각 rho 마다 local test set 만들기
+        if rho == 0:
+            dict_users = {i: np.array([]) for i in range(num_users)}
+            for i, classes in enumerate(class_labels):
+                for label in classes:  # 해당 label (class) 전체 데이터 세트가 들어 가게 된다.
+                    indices = indices_labels[label]
+
+                    dict_users[i] = np.concatenate((dict_users[i], indices), axis=0)
+
+        else:
+            dict_users = {i: np.array([]) for i in range(num_users)}
+
+            for i, classes in enumerate(class_labels):
+                total_label = [n_label for n_label in range(10)]
+                rho_index = []
+
+                for label in classes:  # 해당 label (class) 전체 데이터 세트가 들어 가게 된다.
+                    indices = indices_labels[label]
+                    dict_users[i] = np.concatenate((dict_users[i], indices), axis=0)
+                    total_label = np.delete(total_label, np.where(np.isin(total_label, label)))
+
+                for label in total_label:
+                    indices = np.where(test_label == label)[0]
+                    rho_index.append(indices)
+                rho_index = np.array(np.concatenate(rho_index).ravel().tolist())
+
+                indices_ran = np.random.choice(rho_index, size=int(2000 * rho), replace=True)
+                dict_users[i] = np.concatenate((dict_users[i], indices_ran), axis=0)
+        dict_rhos_groups[rho] = dict_users
+
+
+    return dict_rhos_groups

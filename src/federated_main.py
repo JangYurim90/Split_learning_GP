@@ -32,7 +32,7 @@ if __name__ == '__main__':
     device = 'cuda' if args.gpu else 'cpu'
 
     #load dataset and user groups
-    train_dataset, test_dataset, user_groups = get_dataset(args)
+    train_dataset, test_dataset, user_groups, test_user_groups = get_dataset(args)
 
     #Bulid Model ; client-side/server-side
     if args.model == 'cnn':
@@ -125,6 +125,8 @@ if __name__ == '__main__':
         server_model.eval()
 
         for c in range(args.num_users):
+            client_model.load_state_dict(client_weights[c])
+            client_h.load_state_dict(client_h_weights[c])
             local_model = LocalUpdate(args=args, dataset=train_dataset,
                                       idxs=user_groups[c], logger=logger)
             acc, loss = local_model.inference(model_c = client_model, model_h = client_h, model_s = server_model)
@@ -139,11 +141,21 @@ if __name__ == '__main__':
             print('Train Accuracy: {:.2f}% \n'.format(100 * train_accuracy[-1]))
 
     # Test inference after completion of training
-    test_acc, test_loss = test_inference(args, client_model,client_h,server_model, test_dataset)
+    test_acc_rho =[]
+    rhos = [0, 0.2, 0.4,0.6,0.8,1.0]
+    for rho in rhos:
+        test_acc, test_loss = 0, 0
+        for c in range(args.num_users):
+            client_model.load_state_dict(client_weights[c])
+            client_h.load_state_dict(client_h_weights[c])
+            test_acc_, test_loss = test_inference(args, client_model,client_h,server_model, test_dataset, idx= test_user_groups[rho][c])
+            test_acc += test_acc_
+        avg_test_acc = test_acc / args.num_users
+        test_acc_rho.append(avg_test_acc)
 
     print(f' \n Results after {args.epochs} global rounds of training:')
     print("|---- Avg Train Accuracy: {:.2f}%".format(100 * train_accuracy[-1]))
-    print("|---- Test Accuracy: {:.2f}%".format(100 * test_acc))
+    print("|---- Avg_ Test Accuracy: {:.2f}%".format(100 * test_acc_rho))
 
     # Saving the objects train_loss and train_accuracy:
     file_name = '../save/objects/{}_{}_{}_C[{}]_iid[{}]_E[{}]_B[{}].pkl'. \
