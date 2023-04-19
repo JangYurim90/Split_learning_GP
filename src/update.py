@@ -171,7 +171,7 @@ def test_inference(args, model_c, model_h,model_s, test_dataset, idx):
     device = 'cuda' if args.gpu else 'cpu'
     criterion = nn.NLLLoss().to(device)
     testloader = DataLoader(DatasetSplit(test_dataset, idx),
-                            batch_size=int(len(idx) / 10), shuffle=False)
+                            batch_size=int(len(idx) / 10), shuffle=False) #d
 
     for batch_idx, (images, labels) in enumerate(testloader):
         images, labels = images.to(device), labels.to(device)
